@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>AirGuard Mobile Pro</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/mobile_app.css') }}">
+    <meta name="theme-color" content="#0d6efd">
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+</head>
+<body>
+    <!-- Mobile Header -->
+    <div class="mobile-header">
+        <div class="d-flex justify-content-between align-items-center">
+            <h4><i class="fas fa-wind"></i> AirGuard Pro</h4>
+            <div>
+                <button class="btn btn-sm btn-light me-2" onclick="refreshData()">
+                    <i class="fas fa-sync-alt"></i>
+                </button>
+                <button class="btn btn-sm btn-light" onclick="toggleDarkMode()">
+                    <i class="fas fa-moon"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tab Navigation -->
+    <div class="tab-nav">
+        <button class="tab-btn active" onclick="showTab('dashboard')">
+            <i class="fas fa-home"></i>
+            <span>Home</span>
+        </button>
+        <button class="tab-btn" onclick="showTab('predictions')">
+            <i class="fas fa-chart-line"></i>
+            <span>Predictions</span>
+        </button>
+        <button class="tab-btn" onclick="showTab('advisory')">
+            <i class="fas fa-heartbeat"></i>
+            <span>Health</span>
+        </button>
+        <button class="tab-btn" onclick="showTab('alerts')">
+            <i class="fas fa-bell"></i>
+            <span>Alerts</span>
+        </button>
+        <button class="tab-btn" onclick="showTab('settings')">
+            <i class="fas fa-cog"></i>
+            <span>Settings</span>
+        </button>
+    </div>
+
+    <!-- Dashboard Tab -->
+    <div id="dashboard-tab" class="tab-content active">
+        <div class="mobile-card">
+            <div class="aqi-display" id="mobileAqi">
+                <div class="aqi-value">--</div>
+                <div class="aqi-label">Air Quality Index</div>
+                <div class="aqi-status">Loading...</div>
+                <div class="aqi-time" id="lastUpdated">Last updated: --</div>
+            </div>
+        </div>
+
+        <div class="mobile-card">
+            <h6><i class="fas fa-map-marker-alt"></i> Location</h6>
+            <div class="input-group mb-2">
+                <input type="text" class="form-control" id="mobileLocation" placeholder="Location" value="Delhi">
+                <button class="btn btn-outline-primary" type="button" onclick="getCurrentLocation()">
+                    <i class="fas fa-location-arrow"></i>
+                </button>
+            </div>
+            <div class="row">
+                <div class="col-6">
+                    <input type="number" class="form-control" id="mobileLat" placeholder="Lat" value="28.6139" step="0.0001">
+                </div>
+                <div class="col-6">
+                    <input type="number" class="form-control" id="mobileLon" placeholder="Lon" value="77.2090" step="0.0001">
+                </div>
+            </div>
+            <button class="btn btn-primary w-100 mt-2" onclick="fetchMobileData()">
+                <i class="fas fa-search"></i> Get Air Quality
+            </button>
+        </div>
+
+        <div class="mobile-card">
+            <h6><i class="fas fa-cloud"></i> Current Conditions</h6>
+            <div class="row text-center">
+                <div class="col-4">
+                    <div class="condition-value" id="temperature">--°C</div>
+                    <div class="condition-label">Temperature</div>
+                </div>
+                <div class="col-4">
+                    <div class="condition-value" id="humidity">--%</div>
+                    <div class="condition-label">Humidity</div>
+                </div>
+                <div class="col-4">
+                    <div class="condition-value" id="pressure">-- hPa</div>
+                    <div class="condition-label">Pressure</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="mobile-card">
+            <h6><i class="fas fa-chart-bar"></i> Pollutants</h6>
+            <div id="mobilePollutants"></div>
+        </div>
+
+        <div class="mobile-card">
+            <h6><i class="fas fa-bolt"></i> Quick Actions</h6>
+            <div class="d-grid gap-2">
+                <button class="btn btn-outline-primary" onclick="startRealTimeMonitoring()">
+                    <i class="fas fa-play-circle"></i> Start Real-time Monitoring
+                </button>
+                <button class="btn btn-outline-success" onclick="shareAirQuality()">
+                    <i class="fas fa-share-alt"></i> Share Air Quality
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Predictions Tab -->
+    <div id="predictions-tab" class="tab-content">
+        <div class="mobile-card">
+            <h6><i class="fas fa-crystal-ball"></i> 24-Hour Forecast</h6>
+            <canvas id="mobilePredictionChart"></canvas>
+        </div>
+        
+        <div class="mobile-card">
+            <h6><i class="fas fa-calendar-week"></i> 7-Day Trend</h6>
+            <canvas id="mobileTrendChart"></canvas>
+        </div>
+        
+        <div class="mobile-card">
+            <h6><i class="fas fa-info-circle"></i> Forecast Details</h6>
+            <div id="forecastDetails">
+                <p class="text-muted">Forecast data will appear here...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Advisory Tab -->
+    <div id="advisory-tab" class="tab-content">
+        <div class="mobile-card" id="mobileAdvisory">
+            <h6><i class="fas fa-heartbeat"></i> Health Advisory</h6>
+            <p class="text-muted">Loading health advisory...</p>
+        </div>
+        
+        <div class="mobile-card">
+            <h6><i class="fas fa-user-friends"></i> For Vulnerable Groups</h6>
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="checkChildren" checked>
+                <label class="form-check-label" for="checkChildren">Children</label>
+            </div>
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="checkElderly" checked>
+                <label class="form-check-label" for="checkElderly">Elderly</label>
+            </div>
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="checkAsthma">
+                <label class="form-check-label" for="checkAsthma">Asthma Patients</label>
+            </div>
+            <button class="btn btn-primary w-100 mt-2" onclick="updateAdvisory()">
+                <i class="fas fa-sync"></i> Update Advisory
+            </button>
+        </div>
+    </div>
+
+    <!-- Alerts Tab -->
+    <div id="alerts-tab" class="tab-content">
+        <div class="mobile-card">
+            <h6><i class="fas fa-bell"></i> Active Alerts</h6>
+            <div id="activeAlerts">
+                <p class="text-muted">No active alerts</p>
+            </div>
+        </div>
+        
+        <div class="mobile-card">
+            <h6><i class="fas fa-cog"></i> Alert Settings</h6>
+            <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" id="enableNotifications" checked>
+                <label class="form-check-label" for="enableNotifications">Enable Notifications</label>
+            </div>
+            <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" id="enableSound" checked>
+                <label class="form-check-label" for="enableSound">Enable Sound</label>
+            </div>
+            <div class="mt-3">
+                <label class="form-label">Alert Threshold (AQI)</label>
+                <input type="range" class="form-range" min="50" max="300" step="10" value="100" id="alertThreshold">
+                <div class="d-flex justify-content-between">
+                    <small>50</small>
+                    <small id="thresholdValue">100</small>
+                    <small>300</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Tab -->
+    <div id="settings-tab" class="tab-content">
+        <div class="mobile-card">
+            <h6><i class="fas fa-user"></i> Profile</h6>
+            <div class="mb-3">
+                <label class="form-label">Name</label>
+                <input type="text" class="form-control" id="userName" placeholder="Your name">
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Email</label>
+                <input type="email" class="form-control" id="userEmail" placeholder="Your email">
+            </div>
+        </div>
+        
+        <div class="mobile-card">
+            <h6><i class="fas fa-palette"></i> Appearance</h6>
+            <div class="form-check">
+                <input class="form-check-input" type="radio" name="theme" id="lightTheme" checked>
+                <label class="form-check-label" for="lightTheme">Light Theme</label>
+            </div>
+            <div class="form-check">
+                <input class="form-check-input" type="radio" name="theme" id="darkTheme">
+                <label class="form-check-label" for="darkTheme">Dark Theme</label>
+            </div>
+        </div>
+        
+        <div class="mobile-card">
+            <h6><i class="fas fa-info-circle"></i> About</h6>
+            <p>AirGuard Pro v2.0.0</p>
+            <p>Advanced Real-time Air Quality Monitoring</p>
+            <p class="text-muted">© 2025 AirGuard. All rights reserved.</p>
+        </div>
+    </div>
+
+    <!-- Floating Action Button -->
+    <button class="fab" onclick="openQuickActions()">
+        <i class="fas fa-plus"></i>
+    </button>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="{{ url_for('static', filename='js/mobile_app.js') }}"></script>
+</body>
+</html>

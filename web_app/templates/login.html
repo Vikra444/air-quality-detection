@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AirGuard - Login</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            background: linear-gradient(135deg, #1a2a6c, #b21f1f, #1a2a6c);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            padding: 20px;
+        }
+        .login-container {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            padding: 40px;
+            max-width: 450px;
+            width: 100%;
+            margin: auto;
+        }
+        .logo {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .logo i {
+            font-size: 3rem;
+            color: #1a2a6c;
+            margin-bottom: 15px;
+        }
+        .logo h1 {
+            color: #1a2a6c;
+            font-weight: 700;
+            margin: 0;
+        }
+        .form-control {
+            border-radius: 10px;
+            padding: 12px 15px;
+            border: 2px solid #e1e5f2;
+            transition: all 0.3s;
+        }
+        .form-control:focus {
+            border-color: #1a2a6c;
+            box-shadow: 0 0 0 0.25rem rgba(26, 42, 108, 0.25);
+        }
+        .btn-login {
+            background: linear-gradient(135deg, #1a2a6c, #b21f1f);
+            border: none;
+            border-radius: 10px;
+            padding: 12px;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+        .btn-login:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+        }
+        .btn-login:disabled {
+            background: #cccccc;
+            transform: none;
+            box-shadow: none;
+        }
+        .alert {
+            border-radius: 10px;
+        }
+        .form-label {
+            font-weight: 600;
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="logo">
+            <i class="fas fa-wind"></i>
+            <h1>AirGuard</h1>
+            <p class="text-muted">Air Quality Monitoring & Prediction</p>
+        </div>
+        
+        <div id="loginAlert" class="alert alert-danger d-none" role="alert"></div>
+        
+        <form id="loginForm">
+            <div class="mb-3">
+                <label for="identifier" class="form-label">Mobile or Email</label>
+                <input type="text" class="form-control" id="identifier" placeholder="Enter mobile number or email" required>
+            </div>
+            
+            <div class="mb-3">
+                <label for="password" class="form-label">Password</label>
+                <input type="password" class="form-control" id="password" required>
+            </div>
+            
+            <div class="d-grid">
+                <button type="submit" class="btn btn-login text-white" id="loginBtn">
+                    <i class="fas fa-sign-in-alt me-2"></i>Login
+                </button>
+            </div>
+        </form>
+        
+        <div class="text-center mt-4">
+            <p class="mb-0">Don't have an account? <a href="/register">Register here</a></p>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.getElementById('loginForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const identifier = document.getElementById('identifier').value.trim();
+            const password = document.getElementById('password').value;
+            const loginBtn = document.getElementById('loginBtn');
+            const alertDiv = document.getElementById('loginAlert');
+            
+            // Hide previous alerts
+            alertDiv.classList.add('d-none');
+            
+            // Validate inputs
+            if (!identifier || !password) {
+                alertDiv.textContent = 'Please enter both mobile/email and password.';
+                alertDiv.classList.remove('d-none');
+                return;
+            }
+            
+            // Disable button during submission
+            loginBtn.disabled = true;
+            loginBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Logging in...';
+            
+            try {
+                const response = await fetch('/api/proxy/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ identifier, password })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    // Store token in localStorage
+                    localStorage.setItem('airguard_token', data.access_token);
+                    localStorage.setItem('airguard_user', JSON.stringify(data.user));
+                    
+                    // Redirect to dashboard
+                    window.location.href = '/';
+                } else {
+                    alertDiv.textContent = data.detail || 'Login failed. Please check your credentials.';
+                    alertDiv.classList.remove('d-none');
+                }
+            } catch (error) {
+                alertDiv.textContent = 'Network error. Please try again.';
+                alertDiv.classList.remove('d-none');
+            } finally {
+                // Re-enable button
+                loginBtn.disabled = false;
+                loginBtn.innerHTML = '<i class="fas fa-sign-in-alt me-2"></i>Login';
+            }
+        });
+        
+        // Check if user is already logged in
+        document.addEventListener('DOMContentLoaded', function() {
+            const token = localStorage.getItem('airguard_token');
+            if (token) {
+                // Redirect to dashboard if already logged in
+                window.location.href = '/';
+            }
+        });
+    </script>
+</body>
+</html>

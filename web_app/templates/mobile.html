@@ -1,0 +1,190 @@
+// ... existing code at the end of the script section ...
+        async function fetchMobilePredictions(lat, lon, loc) {
+            try {
+                const response = await fetch('/api/proxy/predictions', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        location_id: loc,
+                        latitude: lat,
+                        longitude: lon,
+                        prediction_horizon: 24
+                    })
+                });
+
+                const data = await response.json();
+                if (data.error) throw new Error(data.error);
+
+                // Update prediction chart
+                const ctx = document.getElementById('mobilePredictionChart').getContext('2d');
+                if (!mobilePredictionChart) {
+                    mobilePredictionChart = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: [],
+                            datasets: [{
+                                label: 'Predicted AQI',
+                                data: [],
+                                borderColor: 'rgb(75, 192, 192)',
+                                tension: 0.1
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false
+                        }
+                    });
+                }
+
+                const labels = [];
+                const values = [];
+                for (let i = 1; i <= 24; i++) {
+                    const key = `hour_${i}`;
+                    if (data.predictions && data.predictions[key]) {
+                        labels.push(`${i}h`);
+                        values.push(data.predictions[key].aqi);
+                    }
+                }
+
+                mobilePredictionChart.data.labels = labels;
+                mobilePredictionChart.data.datasets[0].data = values;
+                mobilePredictionChart.update();
+            } catch (error) {
+                console.error('Error fetching predictions:', error);
+            }
+        }
+
+        function getCurrentLocation() {
+            if (navigator.geolocation) {
+                // Show loading state
+                const locationBtn = event.target.closest('button') || document.querySelector('[onclick="getCurrentLocation()"]');
+                if (locationBtn) {
+                    locationBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+                    locationBtn.disabled = true;
+                }
+                
+                navigator.geolocation.getCurrentPosition(
+                    function(position) {
+                        // Update latitude and longitude fields
+                        document.getElementById('mobileLat').value = position.coords.latitude.toFixed(4);
+                        document.getElementById('mobileLon').value = position.coords.longitude.toFixed(4);
+                        
+                        // Try to set location name
+                        document.getElementById('mobileLocation').value = `Location (${position.coords.latitude.toFixed(4)}, ${position.coords.longitude.toFixed(4)})`;
+                        
+                        // Fetch data for the detected location
+                        fetchMobileData();
+                        
+                        // Restore button
+                        const locationBtn = document.querySelector('[onclick="getCurrentLocation()"]');
+                        if (locationBtn) {
+                            locationBtn.innerHTML = '<i class="fas fa-location-arrow"></i>';
+                            locationBtn.disabled = false;
+                        }
+                        
+                        // Show success message
+                        const alertDiv = document.createElement('div');
+                        alertDiv.className = 'alert alert-success alert-dismissible fade show mt-2';
+                        alertDiv.innerHTML = 'Location detected successfully! <button type="button" class="btn-close" data-bs-dismiss="alert"></button>';
+                        document.querySelector('.mobile-card').insertBefore(alertDiv, document.querySelector('.mobile-card').firstChild);
+                        
+                        // Auto-dismiss after 3 seconds
+                        setTimeout(() => {
+                            if (alertDiv.parentNode) {
+                                alertDiv.parentNode.removeChild(alertDiv);
+                            }
+                        }, 3000);
+                    },
+                    function(error) {
+                        console.error('Geolocation error:', error);
+                        
+                        // Restore button
+                        const locationBtn = document.querySelector('[onclick="getCurrentLocation()"]');
+                        if (locationBtn) {
+                            locationBtn.innerHTML = '<i class="fas fa-location-arrow"></i>';
+                            locationBtn.disabled = false;
+                        }
+                        
+                        // Show error message
+                        alert('Unable to detect location: ' + error.message);
+                    },
+                    {
+                        enableHighAccuracy: true,
+                        timeout: 10000,
+                        maximumAge: 300000 // 5 minutes
+                    }
+                );
+            } else {
+                alert('Geolocation is not supported by your browser');
+            }
+        }
+
+        async function fetchMobileAdvisory(loc, lat, lon, aqi) {
+            try {
+                const params = new URLSearchParams({
+                    location_id: loc,
+                    latitude: lat,
+                    longitude: lon,
+                    aqi: aqi
+                });
+
+                const response = await fetch(`/api/proxy/advisory?${params}`);
+                const data = await response.json();
+
+                if (data.error) throw new Error(data.error);
+
+                // Update advisory display
+                const advisoryCard = document.getElementById('mobileAdvisory');
+                let riskLevel = 'Unknown';
+                let riskClass = 'secondary';
+                
+                if (data.risk_level) {
+                    riskLevel = data.risk_level;
+                    switch (data.risk_level) {
+                        case 'GOOD':
+                            riskClass = 'success';
+                            break;
+                        case 'MODERATE':
+                            riskClass = 'info';
+                            break;
+                        case 'UNHEALTHY_FOR_SENSITIVE':
+                            riskClass = 'warning';
+                            break;
+                        case 'UNHEALTHY':
+                            riskClass = 'warning';
+                            break;
+                        case 'VERY_UNHEALTHY':
+                            riskClass = 'danger';
+                            break;
+                        case 'HAZARDOUS':
+                            riskClass = 'danger';
+                            break;
+                    }
+                }
+
+                advisoryCard.innerHTML = `
+                    <h6><i class="fas fa-heartbeat"></i> Health Advisory</h6>
+                    <div class="alert alert-${riskClass}">
+                        <strong>Risk Level:</strong> ${riskLevel}
+                    </div>
+                    <div class="mt-2">
+                        <h6>Recommendations:</h6>
+                        <ul class="mb-0">
+                            ${data.recommendations ? data.recommendations.map(rec => `<li>${rec}</li>`).join('') : '<li>No specific recommendations available</li>'}
+                        </ul>
+                    </div>
+                `;
+            } catch (error) {
+                console.error('Error fetching advisory:', error);
+                document.getElementById('mobileAdvisory').innerHTML = '<p class="text-danger">Failed to load health advisory</p>';
+            }
+        }
+
+        // Initialize when DOM is loaded
+        document.addEventListener('DOMContentLoaded', function() {
+            // Fetch initial data
+            fetchMobileData();
+        });
+    </script>
+</body>
+</html>

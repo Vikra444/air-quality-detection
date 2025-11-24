@@ -1,0 +1,10 @@
+cd c:\Users\vikra\Desktop\AirGaurd && .\.venv\Scripts\python.exe run_api.py
+
+cd c:\Users\vikra\Desktop\AirGaurd; .\.venv\Scripts\python.exe main.py --mode api --port 8001
+
+cd c:\Users\vikra\Desktop\AirGaurd; .\.venv\Scripts\streamlit.exe run streamlit_app.py
+
+
+python run_api.py
+python main.py --mode api --port 8001
+streamlit run streamlit_app.py

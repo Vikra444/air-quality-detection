@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AirGuard - Advanced Real-Time Air Quality Monitoring</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#">
+                <i class="fas fa-wind"></i> AirGuard <sup>v2.0</sup>
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link active" href="#dashboard"><i class="fas fa-tachometer-alt"></i> Dashboard</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#predictions"><i class="fas fa-chart-line"></i> Predictions</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#advisory"><i class="fas fa-heartbeat"></i> Health Advisory</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#insights"><i class="fas fa-brain"></i> AI Insights</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#trends"><i class="fas fa-chart-bar"></i> Trends</a>
+                    </li>
+                </ul>
+                <ul class="navbar-nav">
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" id="userProfile">
+                            <i class="fas fa-user"></i> <span id="usernameDisplay">Guest</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" id="logoutBtn">
+                            <i class="fas fa-sign-out-alt"></i> Logout
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Container -->
+    <div class="container-fluid mt-4">
+        <!-- Location Selector -->
+        <div class="row mb-4">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="row align-items-center">
+                            <div class="col-md-3">
+                                <label class="form-label">Location</label>
+                                <input type="text" class="form-control" id="locationInput" placeholder="Enter location name">
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">Latitude</label>
+                                <input type="number" class="form-control" id="latitudeInput" step="0.0001">
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">Longitude</label>
+                                <input type="number" class="form-control" id="longitudeInput" step="0.0001">
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">Days</label>
+                                <select class="form-control" id="daysSelect">
+                                    <option value="1">1 Day</option>
+                                    <option value="7" selected>7 Days</option>
+                                    <option value="30">30 Days</option>
+                                    <option value="90">90 Days</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">&nbsp;</label>
+                                <div class="d-grid gap-2 d-md-flex">
+                                    <button class="btn btn-primary me-md-2" onclick="fetchCurrentData()">
+                                        <i class="fas fa-search"></i> Search
+                                    </button>
+                                    <button class="btn btn-success" onclick="startRealTimeUpdates()">
+                                        <i class="fas fa-sync-alt"></i> Real-time
+                                    </button>
+                                    <button class="btn btn-info" onclick="detectUserLocation()">
+                                        <i class="fas fa-location-arrow"></i> Detect
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row mt-2">
+                            <div class="col-md-12">
+                                <div id="locationStatus" class="text-muted small"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Current Air Quality Card -->
+        <div class="row mb-4">
+            <div class="col-md-4">
+                <div class="card text-center" id="aqiCard">
+                    <div class="card-body">
+                        <h5 class="card-title">Air Quality Index</h5>
+                        <h1 class="display-1" id="aqiValue">--</h1>
+                        <p class="card-text" id="aqiStatus">Loading...</p>
+                        <div class="progress" style="height: 20px;">
+                            <div class="progress-bar" id="aqiProgress" role="progressbar" style="width: 0%"></div>
+                        </div>
+                        <div class="mt-2" id="confidenceBadge"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-header">
+                        <h5><i class="fas fa-chart-line"></i> Pollutant Levels</h5>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="pollutantChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Map and Real-time Updates -->
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5><i class="fas fa-map-marker-alt"></i> Location Map</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="map" style="height: 400px;"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5><i class="fas fa-bolt"></i> 24-Hour Prediction</h5>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="predictionChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Advanced Charts -->
+        <div class="row mb-4">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5><i class="fas fa-chart-bar"></i> Historical Trends</h5>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="trendChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Health Advisory -->
+        <div class="row mb-4">
+            <div class="col-md-12">
+                <div class="card" id="advisoryCard">
+                    <div class="card-header">
+                        <h5><i class="fas fa-heartbeat"></i> Health Advisory</h5>
+                    </div>
+                    <div class="card-body" id="advisoryContent">
+                        <p class="text-muted">Loading health advisory...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- AI Insights -->
+        <div class="row mb-4">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5><i class="fas fa-brain"></i> AI Insights</h5>
+                    </div>
+                    <div class="card-body" id="insightsContent">
+                        <p class="text-muted">AI insights will appear here...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Real-time Alerts -->
+        <div class="row mb-4">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5><i class="fas fa-bell"></i> Real-time Alerts</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h6>Alert Configuration</h6>
+                                <div class="form-check form-switch mb-2">
+                                    <input class="form-check-input" type="checkbox" id="enableAlerts" checked>
+                                    <label class="form-check-label" for="enableAlerts">Enable Real-time Alerts</label>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">AQI Threshold</label>
+                                    <input type="range" class="form-range" min="50" max="300" step="10" value="100" id="aqiThreshold">
+                                    <div class="d-flex justify-content-between">
+                                        <small>50 (Good)</small>
+                                        <small id="thresholdDisplay">100</small>
+                                        <small>300 (Hazardous)</small>
+                                    </div>
+                                </div>
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input" type="checkbox" id="emailAlerts" checked>
+                                    <label class="form-check-label" for="emailAlerts">Email Alerts</label>
+                                </div>
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input" type="checkbox" id="smsAlerts">
+                                    <label class="form-check-label" for="smsAlerts">SMS Alerts</label>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <h6>Recent Alerts</h6>
+                                <div id="recentAlerts" class="alert-list">
+                                    <div class="alert alert-info">
+                                        <i class="fas fa-info-circle"></i> System initialized
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- System Status -->
+        <div class="row mb-4">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5><i class="fas fa-server"></i> System Status</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-3">
+                                <div class="text-center p-3 bg-light rounded">
+                                    <i class="fas fa-database fa-2x text-primary"></i>
+                                    <p class="mt-2 mb-1">Database</p>
+                                    <span class="badge bg-success" id="dbStatus">Connected</span>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="text-center p-3 bg-light rounded">
+                                    <i class="fas fa-memory fa-2x text-info"></i>
+                                    <p class="mt-2 mb-1">Cache</p>
+                                    <span class="badge bg-warning" id="cacheStatus">Inactive</span>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="text-center p-3 bg-light rounded">
+                                    <i class="fas fa-robot fa-2x text-success"></i>
+                                    <p class="mt-2 mb-1">ML Models</p>
+                                    <span class="badge bg-success" id="mlStatus">Loaded</span>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="text-center p-3 bg-light rounded">
+                                    <i class="fas fa-bolt fa-2x text-warning"></i>
+                                    <p class="mt-2 mb-1">API Clients</p>
+                                    <span class="badge bg-success" id="apiStatus">Active</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mt-3">
+                            <h6><i class="fas fa-chart-line"></i> Performance Metrics</h6>
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <p>Avg. Response Time: <span id="avgResponseTime">--</span> ms</p>
+                                </div>
+                                <div class="col-md-4">
+                                    <p>Uptime: <span id="uptime">--</span></p>
+                                </div>
+                                <div class="col-md-4">
+                                    <p>Requests: <span id="totalRequests">--</span></p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Voice Interface Button -->
+    <button class="btn btn-primary btn-lg rounded-circle position-fixed" 
+            style="bottom: 20px; right: 20px; width: 60px; height: 60px; z-index: 1000;"
+            onclick="toggleVoiceInterface()">
+        <i class="fas fa-microphone"></i>
+    </button>
+
+    <!-- Voice Interface Modal -->
+    <div class="modal fade" id="voiceModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Voice Assistant</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body text-center">
+                    <div id="voiceStatus">Click to start speaking</div>
+                    <button class="btn btn-primary mt-3" id="voiceButton" onclick="startVoiceRecognition()">
+                        <i class="fas fa-microphone"></i> Start Listening
+                    </button>
+                    <div id="voiceResponse" class="mt-3"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+</body>
+</html>
