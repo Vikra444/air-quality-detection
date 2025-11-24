@@ -1,0 +1,23 @@
+# Virtual env
+.venv/
+venv/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Environment & secrets
+.env
+.env.*
+*.secret
+
+# Local DB / logs
+*.db
+*.sqlite3
+*.log
+
+# Editor / IDE
+.vscode/
+.idea/
+.cursor/
