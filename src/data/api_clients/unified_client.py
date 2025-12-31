@@ -8,10 +8,6 @@ from typing import Dict, Optional, Any, List
 from datetime import datetime
 from .base_client import BaseAPIClient
 from .openweather_client import OpenWeatherClient
-from .airvisual_client import AirVisualClient
-from .aqicn_client import AQICNClient
-from .openaq_client import OpenAQClient
-from .nasa_client import NASAClient
 from .openmeteo_client import OpenMeteoClient
 from .confidence_scorer import ConfidenceScorer
 from ...utils.logger import get_logger
@@ -28,14 +24,10 @@ class UnifiedAirQualityClient:
     def __init__(self):
         self.clients: List[BaseAPIClient] = [
             OpenWeatherClient(),
-            OpenMeteoClient(),  # Free, no key needed - add early in fallback
-            AirVisualClient(),
-            AQICNClient(),
-            OpenAQClient(),
-            NASAClient()  # Add NASA as additional source
+            OpenMeteoClient()  # Free, no key needed - used as fallback
         ]
         self.confidence_scorer = ConfidenceScorer()
-        self.preferred_order = [0, 1, 2, 3, 4, 5]  # Order of preference (updated for new clients)
+        self.preferred_order = [0, 1]  # Order of preference
     
     async def fetch_air_quality(
         self,

@@ -105,14 +105,6 @@ class HealthAdvisory(BaseModel):
         }
 
 
-class WhatIfRequest(BaseModel):
-    """Request model for what-if simulations."""
-    latitude: float = Field(..., ge=-90, le=90)
-    longitude: float = Field(..., ge=-180, le=180)
-    scenario: Dict[str, Any] = Field(..., description="Scenario parameters")
-    location_id: Optional[str] = None
-
-
 class ModelMetrics(BaseModel):
     """Model performance metrics."""
     model_name: str

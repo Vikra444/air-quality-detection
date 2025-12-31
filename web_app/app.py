@@ -16,7 +16,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # FastAPI backend URL
-API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000")
+API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8001")
 API_TOKEN = os.getenv("API_TOKEN", "demo-token")
 
 
@@ -24,18 +24,6 @@ API_TOKEN = os.getenv("API_TOKEN", "demo-token")
 def index():
     """Main dashboard page."""
     return render_template("index.html", api_base_url=API_BASE_URL, api_token=API_TOKEN)
-
-
-@app.route("/mobile")
-def mobile():
-    """Mobile-optimized dashboard."""
-    return render_template("mobile.html", api_base_url=API_BASE_URL, api_token=API_TOKEN)
-
-
-@app.route("/mobile-app")
-def mobile_app():
-    """Enhanced mobile app."""
-    return render_template("mobile_app.html", api_base_url=API_BASE_URL, api_token=API_TOKEN)
 
 
 @app.route("/login")
@@ -54,45 +42,48 @@ def register_page():
 def proxy_register():
     """Proxy endpoint for user registration."""
     try:
-        data = request.json
-        
+        data = request.get_json(silent=True) or {}
+        print("Registration raw data:", request.data)
+        print("Registration parsed JSON:", data)
+        print("Registration headers:", request.headers)
+
         # Debug logging
         print(f"Received registration data: {data}")
-        
+
         # Required fields validation
         required_fields = ["full_name", "mobile", "age", "password", "confirm_password"]
         for field in required_fields:
             if not data.get(field):
                 return jsonify({"detail": f"{field} is required"}), 400
-        
+
         # Password length validation (bcrypt has a 72 byte limit)
         password = data.get("password", "")
         password_length = len(password.encode('utf-8'))
         print(f"Password length in bytes: {password_length}")
         if password_length > 72:
             return jsonify({"detail": "Password is too long. Please use a password with fewer than 72 characters."}), 400
-        
+
         # Confirm password validation
         if password != data.get("confirm_password"):
             return jsonify({"detail": "Passwords do not match."}), 400
-        
+
         # Debug: Log the exact data being sent
         print(f"Sending to FastAPI: {data}")
-        
+
         # Call FastAPI register endpoint
         response = requests.post(
             f"{API_BASE_URL}/api/v1/auth/register",
             json=data,
             timeout=10
         )
-        
+
         print(f"FastAPI request URL: {API_BASE_URL}/api/v1/auth/register")
         print(f"FastAPI request headers: {response.request.headers}")
         print(f"FastAPI request body: {response.request.body}")
-        
+
         print(f"FastAPI response status: {response.status_code}")
         print(f"FastAPI response text: {response.text}")
-        
+
         if response.status_code == 200:
             return jsonify(response.json())
         else:
@@ -102,7 +93,7 @@ def proxy_register():
             if "password cannot be longer than 72 bytes" in str(error_msg):
                 return jsonify({"detail": "Password is too long. Please use a password with fewer than 72 characters."}), 400
             return jsonify({"detail": error_msg}), response.status_code
-    
+
     except Exception as e:
         print(f"Exception in proxy_register: {e}")
         import traceback
@@ -114,7 +105,12 @@ def proxy_register():
 def proxy_login():
     """Proxy endpoint for user login."""
     try:
-        data = request.json
+        data = request.get_json(silent=True) or {}
+        print("Login raw data:", request.data)
+        print("Login parsed JSON:", data)
+        print("Login headers:", request.headers)
+
+
         identifier = data.get("identifier") or data.get("username")  # Accept both for compatibility
         password = data.get("password")
         
@@ -139,7 +135,7 @@ def proxy_login():
         return jsonify({"error": str(e)}), 500
 
 
-@app.route("/api/proxy/current-air-quality")
+@app.route("/api/proxy/air-quality/current")
 def proxy_current_air_quality():
     """Proxy endpoint for current air quality."""
     try:
@@ -215,6 +211,22 @@ def proxy_current_air_quality():
             "details": traceback.format_exc() if app.debug else None
         }), 500
 
+@app.route("/api/proxy/air-quality/hotspots")
+def proxy_air_quality_hotspots():
+    lat = request.args.get("lat", type=float)
+    lon = request.args.get("lon", type=float)
+
+    if lat is None or lon is None:
+        return jsonify({"error": "lat and lon are required"}), 400
+
+    # Simple mock hotspots (replace later with real logic)
+    hotspots = [
+        {"lat": lat + 0.01, "lon": lon + 0.01, "level": "High"},
+        {"lat": lat - 0.01, "lon": lon - 0.01, "level": "Moderate"},
+        {"lat": lat, "lon": lon + 0.015, "level": "Low"},
+    ]
+
+    return jsonify({"hotspots": hotspots})
 
 @app.route("/api/proxy/predictions", methods=["POST"])
 def proxy_predictions():
@@ -310,44 +322,6 @@ def proxy_historical():
         else:
             error_data = response.json() if response.text else {}
             error_msg = error_data.get("detail", "Failed to fetch historical data")
-            return jsonify({"error": error_msg}), response.status_code
-    
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
-@app.route("/api/proxy/insights")
-def proxy_insights():
-    """Proxy endpoint for AI insights."""
-    try:
-        latitude = request.args.get("latitude", type=float)
-        longitude = request.args.get("longitude", type=float)
-        location_id = request.args.get("location_id")
-        days = request.args.get("days", 7, type=int)
-        
-        if not latitude or not longitude:
-            return jsonify({"error": "latitude and longitude are required"}), 400
-        
-        params = {
-            "latitude": latitude,
-            "longitude": longitude,
-            "days": days
-        }
-        if location_id:
-            params["location_id"] = location_id
-        
-        response = requests.get(
-            f"{API_BASE_URL}/api/v1/insights/generate",
-            params=params,
-            headers={"Authorization": f"Bearer {API_TOKEN}"},
-            timeout=15
-        )
-        
-        if response.status_code == 200:
-            return jsonify(response.json())
-        else:
-            error_data = response.json() if response.text else {}
-            error_msg = error_data.get("detail", "Failed to fetch insights")
             return jsonify({"error": error_msg}), response.status_code
     
     except Exception as e:

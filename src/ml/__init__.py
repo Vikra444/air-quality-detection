@@ -1,2 +1,5 @@
-"""Machine learning models and training module."""
+"""Machine Learning module for AirGuard."""
 
+from .predictors import AirQualityPredictor
+
+__all__ = ["AirQualityPredictor"]

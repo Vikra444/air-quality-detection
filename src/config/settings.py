@@ -20,22 +20,9 @@ class Settings:
     
     # API Keys
     openweather_api_key: Optional[str] = get_env("OPENWEATHER_API_KEY")
-    airvisual_api_key: Optional[str] = get_env("AIRVISUAL_API_KEY")
-    aqicn_api_key: Optional[str] = get_env("AQICN_API_KEY")
-    openaq_api_key: Optional[str] = get_env("OPENAQ_API_KEY")
-    nasa_api_key: Optional[str] = get_env("NASA_API_KEY")
-    google_maps_api_key: Optional[str] = get_env("GOOGLE_MAPS_API_KEY")
     
     # API Base URLs
     openweather_base_url: str = get_env("OPENWEATHER_BASE_URL", "https://api.openweathermap.org/data/2.5")
-    airvisual_base_url: str = get_env("AIRVISUAL_BASE_URL", "http://api.airvisual.com/v2")
-    aqicn_base_url: str = get_env("AQICN_BASE_URL", "https://api.waqi.info")
-    openaq_base_url: str = get_env("OPENAQ_BASE_URL", "https://api.openaq.org/v2")
-    
-    # Kafka Configuration
-    kafka_bootstrap_servers: str = get_env("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
-    kafka_topic_air_quality: str = get_env("KAFKA_TOPIC_AIR_QUALITY", "air_quality_data")
-    kafka_topic_predictions: str = get_env("KAFKA_TOPIC_PREDICTIONS", "predictions")
     
     # Model Configuration
     model_update_interval: int = get_env_int("MODEL_UPDATE_INTERVAL", 3600)
@@ -46,7 +33,7 @@ class Settings:
     debug: bool = get_env_bool("DEBUG", False)
     log_level: str = get_env("LOG_LEVEL", "INFO")
     api_host: str = get_env("API_HOST", "0.0.0.0")
-    api_port: int = get_env_int("API_PORT", 8000)
+    api_port: int = get_env_int("API_PORT", 8001)
     dashboard_port: int = get_env_int("DASHBOARD_PORT", 8050)
     
     # Security
@@ -57,7 +44,6 @@ class Settings:
     
     # Scheduler Configuration
     data_fetch_interval: int = get_env_int("DATA_FETCH_INTERVAL", 600)  # 10 minutes
-    ml_update_interval: int = get_env_int("ML_UPDATE_INTERVAL", 3600)  # 1 hour
     
     # Cache Configuration
     cache_ttl: int = get_env_int("CACHE_TTL", 300)  # 5 minutes
@@ -66,26 +52,6 @@ class Settings:
     # Rate Limiting
     api_rate_limit: int = get_env_int("API_RATE_LIMIT", 100)  # requests per minute
     api_rate_limit_window: int = get_env_int("API_RATE_LIMIT_WINDOW", 60)  # seconds
-    
-    # Notification Configuration
-    email_enabled: bool = get_env_bool("EMAIL_ENABLED", False)
-    sms_enabled: bool = get_env_bool("SMS_ENABLED", False)
-    push_enabled: bool = get_env_bool("PUSH_ENABLED", False)
-    
-    # Twilio Configuration (for SMS)
-    twilio_account_sid: Optional[str] = get_env("TWILIO_ACCOUNT_SID")
-    twilio_auth_token: Optional[str] = get_env("TWILIO_AUTH_TOKEN")
-    twilio_phone_number: Optional[str] = get_env("TWILIO_PHONE_NUMBER")
-    
-    # Email Configuration
-    smtp_host: Optional[str] = get_env("SMTP_HOST")
-    smtp_port: int = get_env_int("SMTP_PORT", 587)
-    smtp_user: Optional[str] = get_env("SMTP_USER")
-    smtp_password: Optional[str] = get_env("SMTP_PASSWORD")
-    email_from: Optional[str] = get_env("EMAIL_FROM")
-    
-    # Firebase Configuration (for push notifications)
-    firebase_credentials_path: Optional[str] = get_env("FIREBASE_CREDENTIALS_PATH")
     
     class Config:
         env_file = ".env"

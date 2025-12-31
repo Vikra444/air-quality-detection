@@ -2,7 +2,7 @@
 FastAPI main application for AirGuard.
 """
 
-from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks, WebSocket, WebSocketDisconnect, Request, Response
+from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks, WebSocket, WebSocketDisconnect, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.responses import JSONResponse
@@ -19,7 +19,7 @@ from ..config.settings import settings
 from ..utils.logger import get_logger, performance_monitor
 from ..data.models import (
     AirQualityData, PredictionRequest, PredictionResult,
-    HealthAdvisory, HealthRiskLevel, WhatIfRequest,
+    HealthAdvisory, HealthRiskLevel,
     UserCreate, UserLogin, User
 )
 from ..data.api_clients.unified_client import UnifiedAirQualityClient
@@ -28,7 +28,6 @@ from ..data.cache import cache
 from ..data.preprocessing import AirQualityPreprocessor
 from ..scheduler.scheduler import scheduler
 from ..scheduler.jobs import fetch_air_quality_data
-from ..notifications.notification_service import alert_manager
 from ..utils.monitoring import metrics_collector, system_monitor, get_prometheus_metrics
 from ..security.auth import security_manager, get_current_user, verify_access_token
 from ..security.rate_limiting import rate_limiter, rate_limit_dependency, get_client_ip
@@ -578,229 +577,6 @@ async def generate_predictions(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/api/v1/predictions/explain")
-async def explain_predictions(
-    request: PredictionRequest,
-    method: str = "shap",
-    token: Optional[HTTPAuthorizationCredentials] = Depends(verify_token)
-):
-    """Generate explainability analysis for predictions using SHAP/LIME."""
-    try:
-        from ..ml.predictors import AirQualityPredictor
-        from ..ml.explainability import ExplainerFactory
-        import numpy as np
-        
-        # Generate prediction first
-        predictor = AirQualityPredictor()
-        result = await predictor.generate_predictions(request)
-        
-        # Get model (use ensemble if available)
-        model = predictor.models.get("advanced_ensemble")
-        if not model:
-            # Fallback to first available model
-            model = list(predictor.models.values())[0] if predictor.models else None
-        
-        if not model or not hasattr(model, 'model'):
-            raise HTTPException(status_code=400, detail="No trained model available for explanation")
-        
-        # Prepare input data
-        # Get current air quality data
-        raw_data = await unified_client.fetch_air_quality(request.latitude, request.longitude)
-        if not raw_data:
-            raise HTTPException(status_code=503, detail="Failed to fetch air quality data")
-        
-        # Extract features (simplified - in production, use proper feature extraction)
-        features = np.array([[
-            raw_data.get("aqi", 0),
-            raw_data.get("pm25", 0),
-            raw_data.get("pm10", 0),
-            raw_data.get("no2", 0),
-            raw_data.get("co", 0),
-            raw_data.get("o3", 0),
-            raw_data.get("so2", 0),
-            raw_data.get("temperature", 20),
-            raw_data.get("humidity", 50),
-            raw_data.get("wind_speed", 3),
-            raw_data.get("wind_direction", 0),
-            raw_data.get("pressure", 1013)
-        ]])
-        
-        # Get training data for LIME (simplified - use recent historical data)
-        historical_data = await storage.get_historical_data(
-            request.location_id,
-            datetime.now() - timedelta(days=7),
-            datetime.now(),
-            limit=100
-        )
-        
-        training_data = None
-        if historical_data:
-            # Convert to numpy array
-            training_samples = []
-            for record in historical_data:
-                training_samples.append([
-                    record.aqi, record.pm25, record.pm10, record.no2, record.co,
-                    record.o3, record.so2, record.temperature or 20,
-                    record.humidity or 50, record.wind_speed or 3,
-                    record.wind_direction or 0, record.pressure or 1013
-                ])
-            if training_samples:
-                training_data = np.array(training_samples)
-        
-        # Generate explanations
-        explanations = ExplainerFactory.explain_prediction(
-            model.model if hasattr(model, 'model') else model,
-            features[0],
-            training_data,
-            method=method
-        )
-        
-        return {
-            "prediction": result.dict() if hasattr(result, 'dict') else result,
-            "explanations": explanations,
-            "method": method,
-            "timestamp": datetime.now().isoformat()
-        }
-    
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error explaining predictions: {e}", error=str(e))
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-# Enhanced Simulation Endpoints
-@app.post("/api/v1/simulations/what-if")
-async def what_if_simulation(
-    request: WhatIfRequest,
-    token: Optional[HTTPAuthorizationCredentials] = Depends(verify_token)
-):
-    """Run what-if scenario simulation."""
-    try:
-        from ..ml.simulation import WhatIfSimulator
-        from ..ml.predictors import AirQualityPredictor
-        
-        latitude = request.latitude
-        longitude = request.longitude
-        scenario = request.scenario
-        location_id = request.location_id
-        
-        if not latitude or not longitude:
-            raise HTTPException(status_code=400, detail="latitude and longitude are required")
-        
-        # Get current data
-        raw_data = await unified_client.fetch_air_quality(latitude, longitude)
-        if not raw_data:
-            raise HTTPException(status_code=503, detail="Failed to fetch air quality data")
-        
-        # Initialize simulator
-        predictor = AirQualityPredictor()
-        simulator = WhatIfSimulator(predictor)
-        
-        # Run simulation
-        result = simulator.simulate(
-            raw_data,
-            scenario,
-            prediction_horizon=24
-        )
-        
-        return {
-            "location_id": location_id or f"Location_{latitude}_{longitude}",
-            "latitude": latitude,
-            "longitude": longitude,
-            "scenario": scenario,
-            "simulation_result": result,
-            "timestamp": datetime.now().isoformat()
-        }
-    
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error running simulation: {e}", error=str(e))
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-# Enhanced Geospatial Endpoints
-@app.get("/api/v1/geospatial/morphology")
-async def get_geospatial_morphology(
-    latitude: float,
-    longitude: float,
-    token: Optional[HTTPAuthorizationCredentials] = Depends(verify_token)
-):
-    """Get geospatial morphology classification (urban vs peri-urban)."""
-    try:
-        from ..data.geospatial import GeospatialMorphologyAnalyzer
-        
-        analyzer = GeospatialMorphologyAnalyzer()
-        result = analyzer.classify_area(latitude, longitude)
-        
-        return {
-            "latitude": latitude,
-            "longitude": longitude,
-            "morphology": result,
-            "timestamp": datetime.now().isoformat()
-        }
-    
-    except Exception as e:
-        logger.error(f"Error classifying morphology: {e}", error=str(e))
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-# Enhanced AI Insights Endpoints
-@app.get("/api/v1/insights/generate")
-async def generate_ai_insights(
-    latitude: float,
-    longitude: float,
-    location_id: Optional[str] = None,
-    days: int = 7,
-    token: Optional[HTTPAuthorizationCredentials] = Depends(verify_token)
-):
-    """Generate comprehensive AI insights."""
-    try:
-        from ..ai_insights import InsightsGenerator
-        
-        # Get current data
-        raw_data = await unified_client.fetch_air_quality(latitude, longitude)
-        if not raw_data:
-            raise HTTPException(status_code=503, detail="Failed to fetch air quality data")
-        
-        # Get historical data
-        loc_id = location_id or f"Location_{latitude}_{longitude}"
-        historical_data = await storage.get_historical_data(
-            loc_id,
-            datetime.now() - timedelta(days=days),
-            datetime.now(),
-            limit=1000  # Increased limit for better insights
-        )
-        
-        # Get previous data for comparison
-        previous_data = None
-        if historical_data and len(historical_data) > 0:
-            previous_data = historical_data[0]
-        
-        # Generate insights
-        generator = InsightsGenerator()
-        insights = generator.generate_insights(
-            raw_data,
-            historical_data,
-            weather_data=raw_data,
-            previous_data=previous_data.dict() if previous_data else None
-        )
-        
-        return {
-            "location_id": loc_id,
-            "latitude": latitude,
-            "longitude": longitude,
-            "insights": insights,
-            "timestamp": datetime.now().isoformat(),
-            "historical_days": days
-        }
-    
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error generating insights: {e}", error=str(e))
-        raise HTTPException(status_code=500, detail=str(e))
 
 
 # Enhanced Health Advisory Endpoints
@@ -811,6 +587,7 @@ async def get_health_advisory(
 ):
     """Get personalized health advisory based on AQI and user profile."""
     try:
+        from ..advisory.personalized import generate_personalized_advisory, get_aqi_category
         # Generate personalized advisory
         advisory = generate_personalized_advisory(current_user, aqi)
         
@@ -1078,59 +855,6 @@ async def get_system_metrics(token: Optional[HTTPAuthorizationCredentials] = Dep
         }
     except Exception as e:
         logger.error(f"Error getting system metrics: {e}", error=str(e))
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-# New endpoint for subscribing to notifications
-@app.post("/api/v1/notifications/subscribe")
-async def subscribe_to_notifications(
-    subscription: Dict[str, Any],
-    token: Optional[HTTPAuthorizationCredentials] = Depends(verify_token)
-):
-    """Subscribe to air quality notifications."""
-    try:
-        # In a real implementation, you would store subscriptions in a database
-        # For now, we'll just log the subscription
-        logger.info(f"New notification subscription: {subscription}")
-        
-        return {
-            "status": "success",
-            "message": "Subscribed to notifications",
-            "subscription_id": "sub_" + str(hash(str(subscription)))[:8]
-        }
-    except Exception as e:
-        logger.error(f"Error subscribing to notifications: {e}", error=str(e))
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-# New endpoint for sending test alerts (admin only)
-@app.post("/api/v1/notifications/test-alert")
-async def send_test_alert(
-    alert_data: Dict[str, Any],
-    token: Optional[HTTPAuthorizationCredentials] = Depends(require_role("admin"))
-):
-    """Send a test alert (admin only)."""
-    try:
-        recipients = alert_data.get("recipients", [])
-        alert_type = alert_data.get("alert_type", "TEST")
-        message = alert_data.get("message", "Test alert from AirGuard")
-        data = alert_data.get("data", {})
-        
-        if not recipients:
-            raise HTTPException(status_code=400, detail="Recipients are required")
-        
-        # Send test alert
-        await alert_manager.notification_service.send_alert(
-            recipients, alert_type, message, data
-        )
-        
-        return {
-            "status": "success",
-            "message": "Test alert sent",
-            "recipients": len(recipients)
-        }
-    except Exception as e:
-        logger.error(f"Error sending test alert: {e}", error=str(e))
         raise HTTPException(status_code=500, detail=str(e))
 
 

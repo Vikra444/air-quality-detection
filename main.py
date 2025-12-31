@@ -33,7 +33,7 @@ def main():
             app,
             host=args.host,
             port=port,
-            reload=args.debug,
+            reload=False,
             log_level="info"
         )
     elif args.mode == "dashboard":

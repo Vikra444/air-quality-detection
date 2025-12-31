@@ -8,17 +8,9 @@ from datetime import datetime, timedelta
 from ..data.models import PredictionRequest, PredictionResult, HealthRiskLevel, AirQualityData
 from ..data.storage import storage
 from ..data.api_clients.unified_client import UnifiedAirQualityClient
-from .models.ensemble import EnsembleAirQualityModel, RandomForestAirQualityModel
-from .models.advanced_models import AttentionLSTMAirQualityModel, MultiTaskLSTMAirQualityModel, AdvancedEnsembleAirQualityModel
 from ..utils.monitoring import time_execution, count_calls, metrics_collector
 from ..utils.logger import get_logger, performance_monitor
 import time
-
-try:
-    from .models.ensemble import XGBoostAirQualityModel
-    XGBOOST_AVAILABLE = True
-except ImportError:
-    XGBOOST_AVAILABLE = False
 
 logger = get_logger("ml.predictors")
 
@@ -28,33 +20,7 @@ class AirQualityPredictor:
     
     def __init__(self):
         self.unified_client = UnifiedAirQualityClient()
-        self.models = {}
-        self._initialize_models()
-    
-    def _initialize_models(self):
-        """Initialize ML models."""
-        try:
-            # Create models list with both traditional and advanced models
-            model_list = [
-                RandomForestAirQualityModel(),
-                AttentionLSTMAirQualityModel(sequence_length=24)
-            ]
-            
-            # Add XGBoost if available
-            if XGBOOST_AVAILABLE:
-                try:
-                    model_list.append(XGBoostAirQualityModel())
-                except Exception as e:
-                    logger.warning(f"Could not initialize XGBoost model: {e}")
-            
-            # Create advanced ensemble model
-            if len(model_list) > 0:
-                self.models["advanced_ensemble"] = AdvancedEnsembleAirQualityModel(model_list)
-                logger.info("Advanced ML models initialized")
-            else:
-                logger.warning("No ML models available. Predictions will use simple heuristics.")
-        except Exception as e:
-            logger.warning(f"Could not initialize ML models: {e}. Predictions will use simple heuristics.")
+        logger.info("Using simple prediction model")
     
     @time_execution("prediction_generation", labels={"type": "full_prediction"})
     async def generate_predictions(
@@ -139,45 +105,9 @@ class AirQualityPredictor:
             logger.error(f"Error generating predictions: {e}", error=str(e))
             raise
     
-    @time_execution("ml_prediction", labels={"type": "single_prediction"})
     async def _ml_predict(self, current_data: Dict[str, Any], hours_ahead: int) -> float:
-        """ML-based prediction using advanced models."""
-        try:
-            current_aqi = current_data.get("aqi", 50)
-            
-            # If we have trained models, use them
-            if "advanced_ensemble" in self.models and self.models["advanced_ensemble"].is_trained:
-                # Prepare features for ML model
-                features = np.array([[
-                    current_aqi,
-                    current_data.get("pm25", 0),
-                    current_data.get("pm10", 0),
-                    current_data.get("no2", 0),
-                    current_data.get("co", 0),
-                    current_data.get("o3", 0),
-                    current_data.get("so2", 0),
-                    current_data.get("temperature", 20),
-                    current_data.get("humidity", 50),
-                    current_data.get("wind_speed", 3),
-                    current_data.get("pressure", 1013),
-                    hours_ahead
-                ]])
-                
-                # Make prediction
-                prediction, confidence = self.models["advanced_ensemble"].predict_with_confidence(features)
-                predicted_aqi = float(prediction[0]) if isinstance(prediction, np.ndarray) else float(prediction)
-                
-                # Record accuracy metric
-                metrics_collector.observe_histogram("prediction_confidence", confidence)
-                
-                # Ensure prediction is within reasonable bounds
-                return max(0, min(500, predicted_aqi))
-            else:
-                # Fallback to simple prediction
-                return self._simple_predict(current_data, hours_ahead)
-        except Exception as e:
-            logger.warning(f"ML prediction failed, using simple prediction: {e}")
-            return self._simple_predict(current_data, hours_ahead)
+        """Simple prediction based on current data."""
+        return self._simple_predict(current_data, hours_ahead)
     
     def _simple_predict(self, current_data: Dict[str, Any], hours_ahead: int) -> float:
         """Simple prediction based on current data and time of day."""
